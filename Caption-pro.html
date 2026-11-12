@@ -38,3 +38,193 @@ video{display:block;width:100%;aspect-ratio:16/9;max-height:75vh;object-fit:cont
 </style>
 </head>
 <body>
+<div class="card">
+<h1>🎬 Caption Pro - Subtitle on Video</h1>
+<p class="sub">Pashto / Urdu / Koi bhi zuban -> English Caption -> Video ke uper Subtitle</p>
+
+<label for="f">1. Audio ya Video Upload Karo</label>
+<input id="f" type="file" accept="video/*,audio/*">
+
+<label for="lang">Video ki Zuban</label>
+<select id="lang">
+  <option value="">Khud pehchano (Auto)</option>
+  <option value="pashto">Pashto</option>
+  <option value="urdu">Urdu</option>
+  <option value="english">English</option>
+  <option value="hindi">Hindi</option>
+  <option value="arabic">Arabic</option>
+  <option value="punjabi">Punjabi</option>
+</select>
+
+<label for="task">Caption Zuban</label>
+<select id="task">
+  <option value="translate">English Caption</option>
+  <option value="transcribe">Wahi zuban jo boli gayi hai</option>
+</select>
+
+<label for="sty">Subtitle Style</label>
+<select id="sty">
+  <option value="yt">YouTube Style - Neeche, Yellow</option>
+  <option value="box">Neeche, White on Black Box</option>
+  <option value="mid">Beech mein, Bada White</option>
+  <option value="top">Upar, Yellow</option>
+</select>
+
+<label for="model">Model (bada = behtar, lekin sust)</label>
+<select id="model">
+  <option value="tiny">Tez (tiny)</option>
+  <option value="base" selected>Behtar (base)</option>
+  <option value="small">Sab se behtar (small) - bohat sust</option>
+</select>
+
+<button id="go" class="go" disabled>✨ English Caption Banao</button>
+<div id="st" role="status" aria-live="polite">File select karo...</div>
+
+<div class="wrap" id="wrap">
+  <video id="v" controls playsinline></video>
+  <div id="cap" data-s="yt"><span id="capt"></span></div>
+</div>
+<div class="row">
+  <button id="srt" class="ghost" disabled>SRT Download</button>
+  <button id="fs" class="ghost">⛶ Fullscreen</button>
+</div>
+<ol id="lines"></ol>
+</div>
+
+<script type="module">
+import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2";
+
+const $ = id => document.getElementById(id);
+const v = $("v"), st = $("st"), go = $("go"), srtB = $("srt"), cap = $("cap"), capt = $("capt"), list = $("lines");
+let file = null, chunks = [], asr = null, gpu = false, mid = "", raf = 0, cur = -1;
+const say = t => st.textContent = t;
+
+$("task").onchange = () => go.textContent = $("task").value === "translate" ? "✨ English Caption Banao" : "✨ Caption Banao";
+$("sty").onchange = () => cap.dataset.s = $("sty").value;
+$("fs").onclick = () => { const w = $("wrap"); (w.requestFullscreen || w.webkitRequestFullscreen).call(w); };
+
+$("f").onchange = e => {
+  file = e.target.files[0];
+  if (!file) return;
+  v.src = URL.createObjectURL(file);
+  chunks = []; list.innerHTML = ""; srtB.disabled = true;
+  capt.textContent = ""; cap.style.display = "none";
+  go.disabled = false;
+  say("File tayyar hai. Upar wala button dabayen.");
+};
+
+async function toPCM(f) {
+  const ctx = new AudioContext({ sampleRate: 16000 });
+  const buf = await ctx.decodeAudioData(await f.arrayBuffer());
+  const n = buf.numberOfChannels, len = buf.length, out = new Float32Array(len);
+  for (let c = 0; c < n; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) out[i] += d[i] / n;
+  }
+  ctx.close();
+  return out;
+}
+
+async function load(n, wasm) {
+  const cb = p => { if (p.status === "progress" && p.progress != null) say("Model download ho raha hai: " + Math.round(p.progress) + "% (sirf pehli baar)"); };
+  if (!wasm && navigator.gpu) {
+    if (asr && gpu && mid === n) return asr;
+    try {
+      asr = await pipeline("automatic-speech-recognition", "onnx-community/whisper-" + n, {
+        device: "webgpu", dtype: { encoder_model: "fp32", decoder_model_merged: "q4" }, progress_callback: cb
+      });
+      gpu = true; mid = n; return asr;
+    } catch (e) { console.warn(e); }
+  }
+  gpu = false;
+  if (asr && mid === n + "w") return asr;
+  asr = await pipeline("automatic-speech-recognition", "Xenova/whisper-" + n, { dtype: "q8", progress_callback: cb });
+  mid = n + "w";
+  return asr;
+}
+
+const run = (m, pcm) => {
+  const o = { task: $("task").value, chunk_length_s: 30, stride_length_s: 5, return_timestamps: true };
+  if ($("lang").value) o.language = $("lang").value;
+  return m(pcm, o);
+};
+
+go.onclick = async () => {
+  if (!file) return;
+  go.disabled = true; srtB.disabled = true;
+  let timer = 0, lock = null;
+  const t0 = Date.now();
+  try {
+    try { lock = await navigator.wakeLock?.request("screen"); } catch {}
+    say("Model tayyar ho raha hai...");
+    const n = $("model").value;
+    let m = await load(n, false);
+    say("Awaaz nikali ja rahi hai...");
+    const pcm = await toPCM(file);
+    timer = setInterval(() => say("Caption ban rahe hain... " + Math.round((Date.now() - t0) / 1000) + " sec. Page khula rakhen."), 1000);
+    let res;
+    try { res = await run(m, pcm); }
+    catch (e) {
+      if (!gpu) throw e;
+      console.warn(e);
+      m = await load(n, true);
+      res = await run(m, pcm);
+    }
+    clearInterval(timer);
+    chunks = (res.chunks || []).filter(c => c.text.trim());
+    if (!chunks.length && res.text && res.text.trim()) chunks = [{ text: res.text, timestamp: [0, v.duration || 5] }];
+    render();
+    say(chunks.length ? "Subtitle tayyar hain! Video chalayen." : "Koi awaaz nahi mili. Dusri zuban ya bada model try karen.");
+    srtB.disabled = !chunks.length;
+  } catch (err) {
+    console.error(err);
+    say("Masla aaya. Chhoti video ya 'tiny' model se dobara try karen.");
+  }
+  clearInterval(timer);
+  try { lock?.release(); } catch {}
+  go.disabled = false;
+};
+
+const end = c => c.timestamp[1] ?? (v.duration || c.timestamp[0] + 3);
+const clock = t => Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0");
+
+function render() {
+  list.innerHTML = "";
+  chunks.forEach(c => {
+    const li = document.createElement("li");
+    li.innerHTML = "<time></time><span></span>";
+    li.firstChild.textContent = clock(c.timestamp[0]);
+    li.lastChild.textContent = c.text.trim();
+    li.onclick = () => { v.currentTime = c.timestamp[0]; v.play(); };
+    list.appendChild(li);
+  });
+  cancelAnimationFrame(raf); cur = -1; tick();
+}
+
+function tick() {
+  const t = v.currentTime;
+  const i = chunks.findIndex(c => t >= c.timestamp[0] && t < end(c));
+  if (i !== cur) {
+    cur = i;
+    capt.textContent = i < 0 ? "" : chunks[i].text.trim();
+    cap.style.display = i < 0 ? "none" : "block";
+    [...list.children].forEach((li, k) => li.classList.toggle("on", k === i));
+  }
+  raf = requestAnimationFrame(tick);
+}
+
+const ts = t => {
+  const p = (x, w = 2) => String(x).padStart(w, "0");
+  return p(Math.floor(t / 3600)) + ":" + p(Math.floor(t % 3600 / 60)) + ":" + p(Math.floor(t % 60)) + "," + p(Math.floor(t % 1 * 1000), 3);
+};
+
+srtB.onclick = () => {
+  const body = chunks.map((c, i) => (i + 1) + "\n" + ts(c.timestamp[0]) + " --> " + ts(Math.max(end(c), c.timestamp[0] + .5)) + "\n" + c.text.trim() + "\n").join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([body], { type: "text/plain;charset=utf-8" }));
+  a.download = "captions.srt";
+  a.click();
+};
+</script>
+</body>
+</html>
