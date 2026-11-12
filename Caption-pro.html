@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Caption Pro - Subtitle on Video</title>
+<style>
+:root{color-scheme:dark;box-sizing:border-box;--o:-2px -2px 0 #000,2px -2px 0 #000,-2px 2px 0 #000,2px 2px 0 #000,0 3px 6px #000}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#0d0d10;color:#f2f2f5;font:16px/1.5 system-ui,"Segoe UI",Roboto,sans-serif;padding:max(14px,env(safe-area-inset-top)) 14px max(20px,env(safe-area-inset-bottom))}
+.card{max-width:640px;margin:0 auto;background:#1c1c21;border-radius:22px;padding:20px}
+h1{font-size:1.55rem;line-height:1.2;margin:.2rem 0 .6rem}
+.sub{color:#9a9aa6;margin:0 0 .6rem}
+label{display:block;margin:14px 0 6px;color:#c8c8d2}
+input[type=file],select{width:100%;font:inherit;color:#f2f2f5;background:#2a2a31;border:1px solid #3a3a44;border-radius:14px;padding:14px}
+button{font:inherit;cursor:pointer;border-radius:16px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #7aa7ff;outline-offset:2px}
+.go{width:100%;font-weight:700;color:#fff;background:#2f7bff;border:0;padding:16px;margin-top:18px}
+.ghost{flex:1;color:#dfe6ff;background:#2a2a31;border:1px solid #3a3a44;padding:12px}
+button:disabled{opacity:.45;cursor:default}
+#st{color:#ffc400;margin:12px 0;min-height:1.5em}
+.wrap{position:relative;container-type:inline-size;border-radius:14px;overflow:hidden;background:#000}
+video{display:block;width:100%;aspect-ratio:16/9;max-height:75vh;object-fit:contain;background:#2b2b2e}
+.wrap:fullscreen video{max-height:100vh;height:100%}
+#cap{position:absolute;left:4%;right:4%;display:none;text-align:center;pointer-events:none;font-weight:800;line-height:1.4;font-size:clamp(14px,5cqw,44px);unicode-bidi:plaintext}
+#cap span{padding:.05em .4em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+#cap[data-s=yt]{bottom:14%;color:#ffe600;text-shadow:var(--o)}
+#cap[data-s=box]{bottom:14%;color:#fff}
+#cap[data-s=box] span{background:rgba(0,0,0,.78);border-radius:.3em}
+#cap[data-s=mid]{top:50%;transform:translateY(-50%);color:#fff;font-size:clamp(18px,7cqw,56px);text-shadow:var(--o)}
+#cap[data-s=top]{top:6%;color:#ffe600;text-shadow:var(--o)}
+.row{display:flex;gap:10px;margin:12px 0}
+#lines{list-style:none;margin:0;padding:0}
+#lines li{padding:8px 10px;border-bottom:1px solid #2c2c35;cursor:pointer;display:flex;gap:10px;unicode-bidi:plaintext}
+#lines li.on{background:#26262e;border-left:3px solid #ffe600}
